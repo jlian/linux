@@ -4740,6 +4740,30 @@ static int dwc2_hsotg_vbus_draw(struct usb_gadget *gadget, unsigned int mA)
 	return usb_phy_set_power(hsotg->uphy, mA);
 }
 
+static int dwc2_hsotg_wakeup(struct usb_gadget *gadget)
+{
+       u32 dctl;
+       struct dwc2_dregs_backup *dr;
+       struct dwc2_hsotg *dev;
+       unsigned long flags;
+       dev = container_of(gadget, struct dwc2_hsotg, gadget);
+       dr = &dev->dr_backup;
+
+       spin_lock_irqsave(&dev->lock, flags);
+       udelay(10);
+
+       /* Start Remote Wakeup Signaling */
+       dwc2_writel(dr->dctl | DCTL_RMTWKUPSIG, dev->regs + DCTL);
+       mdelay(12);
+       dctl = dwc2_readl(dev->regs + DCTL);
+       dctl &= ~DCTL_RMTWKUPSIG;
+       dwc2_writel(dctl, dev->regs + DCTL);
+
+       spin_unlock_irqrestore(&dev->lock, flags);
+
+       return 0;
+}
+
 static void dwc2_gadget_set_speed(struct usb_gadget *g, enum usb_device_speed speed)
 {
 	struct dwc2_hsotg *hsotg = to_hsotg(g);
@@ -4771,6 +4795,7 @@ static const struct usb_gadget_ops dwc2_hsotg_gadget_ops = {
 	.udc_set_speed		= dwc2_gadget_set_speed,
 	.vbus_session		= dwc2_hsotg_vbus_session,
 	.vbus_draw		= dwc2_hsotg_vbus_draw,
+	.wakeup                 = dwc2_hsotg_wakeup,
 };
 
 /**
